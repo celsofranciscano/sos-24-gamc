@@ -11,7 +11,8 @@
 // ============================================================
 
 generator client {
-  provider = "prisma-client-js" // Genera el cliente de Prisma para utilizarlo desde la aplicación.
+  provider = "prisma-client"            // Generador nuevo de Prisma 7 (cliente Rust-free).
+  output   = "../src/generated/prisma"  // Salida obligatoria en v7: el cliente vive dentro del proyecto.
 }
 
 datasource db {

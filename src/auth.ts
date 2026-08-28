@@ -1,85 +1,101 @@
 import NextAuth from "next-auth";
-import CredentialsProvider from "next-auth/providers/credentials";
-import prisma from "@/lib/db/prisma";
+import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcrypt";
 
+import { authConfig } from "@/lib/auth/config";
+import prisma from "@/lib/db/prisma";
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
+  ...authConfig,
   providers: [
-    CredentialsProvider({
-      name: "Credentials",
+    Credentials({
+      id: "institution",
+      name: "Institución / GAMC",
       credentials: {
-        email: {
-          label: "Email",
-          type: "email",
-          placeholder: "ejemplo@gmail.com",
-        },
-        password: { label: "Password", type: "password" },
+        email: { label: "Correo institucional", type: "email" },
+        password: { label: "Contraseña", type: "password" },
       },
-      async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
-          throw new Error("Debe proporcionar un email y una contraseña.");
+      authorize: async (credentials) => {
+        const email = credentials?.email;
+        const password = credentials?.password;
+
+        if (typeof email !== "string" || typeof password !== "string") {
+          throw new Error("Debe proporcionar correo y contraseña.");
         }
 
-        // Buscar usuario en la base de datos
-        const existingUser = await prisma.tbusers.findUnique({
-          where: { email: credentials.email },
+        const user = await prisma.tbusers.findUnique({
+          where: { email },
+          include: {
+            tbprivileges: true,
+            tbinstitutions: { select: { PK_institution: true, name: true } },
+            tbsubinstitutions: { select: { PK_subinstitution: true } },
+          },
         });
 
-        if (!existingUser) {
-          throw new Error("El usuario no existe.");
+        if (!user || !user.status) {
+          throw new Error("El usuario no existe o se encuentra inactivo.");
         }
 
-        // Comparar contraseñas
-        const isPasswordValid = await bcrypt.compare(
-          credentials.password,
-          existingUser.password,
-        );
-        if (!isPasswordValid) {
+        const isValid = await bcrypt.compare(password, user.password);
+
+        if (!isValid) {
           throw new Error("Contraseña incorrecta.");
         }
 
-        // Obtener el privilegio
-        const userPrivilege = await prisma.tbprivileges.findUnique({
-          where: { PK_privilege: existingUser.FK_privilege },
+        return {
+          id: user.PK_user.toString(),
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          role: "INSTITUTION",
+          privilegeCode: user.tbprivileges.privilegeCode,
+          privilegeName: user.tbprivileges.privilege,
+          institutionId: user.FK_institution ?? null,
+          subinstitutionId: user.FK_subinstitution ?? null,
+        };
+      },
+    }),
+    Credentials({
+      id: "citizen",
+      name: "Ciudadano",
+      credentials: {
+        phoneNumber: { label: "Número de teléfono", type: "tel" },
+        password: { label: "Contraseña", type: "password" },
+      },
+      authorize: async (credentials) => {
+        const phoneNumber = credentials?.phoneNumber;
+        const password = credentials?.password;
+
+        if (
+          typeof phoneNumber !== "string" ||
+          typeof password !== "string"
+        ) {
+          throw new Error("Debe proporcionar teléfono y contraseña.");
+        }
+
+        const citizen = await prisma.tbcitizens.findUnique({
+          where: { phoneNumber },
         });
 
+        if (!citizen || !citizen.status || !citizen.password) {
+          throw new Error("La cuenta no existe o se encuentra inactiva.");
+        }
+
+        const isValid = await bcrypt.compare(password, citizen.password);
+
+        if (!isValid) {
+          throw new Error("Contraseña incorrecta.");
+        }
+
         return {
-          id: existingUser.PK_user?.toString() || "",
-          email: existingUser.email,
-          firstName: existingUser.firstName,
-          lastName: existingUser.lastName,
-          privilege: userPrivilege?.privilege,
-          privilegeCode: userPrivilege?.privilegeCode,
-          line: existingUser.line,
+          id: citizen.PK_citizen.toString(),
+          firstName: citizen.firstName,
+          lastName: citizen.lastName,
+          email: citizen.email ?? null,
+          phoneNumber: citizen.phoneNumber,
+          role: "CITIZEN",
         };
       },
     }),
   ],
-  callbacks: {
-    async jwt({ token, user }) {
-      if (user) {
-        token.user = {
-          id: user.id,
-          email: user.email,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          privilege: user.privilege,
-          privilegeCode: user.privilegeCode, // <-- aquí guardamos el privilegeCode
-          line: user.line,
-        };
-        token.privilege = user.privilege;
-        token.privilegeCode = user.privilegeCode;
-      }
-      return token;
-    },
-    async session({ session, token }) {
-      session.user = token.user;
-      session.privilege = token.privilege;
-      session.privilegeCode = token.privilegeCode; // <-- disponible en session
-      return session;
-    },
-  },
-  pages: {
-    signIn: "/login",
-  },
 });
