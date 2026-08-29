@@ -188,7 +188,7 @@ export default function AssignmentDetailPage({
               <div className="flex justify-between"><dt className="text-muted-foreground">Aceptada</dt><dd>{data.acceptedAt ? new Date(data.acceptedAt).toLocaleString("es-BO") : "—"}</dd></div>
               <div className="flex justify-between"><dt className="text-muted-foreground">Llegó</dt><dd>{data.arrivedAt ? new Date(data.arrivedAt).toLocaleString("es-BO") : "—"}</dd></div>
               <div className="flex justify-between"><dt className="text-muted-foreground">Finalizada</dt><dd>{data.completedAt ? new Date(data.completedAt).toLocaleString("es-BO") : "—"}</dd></div>
-              <div className="flex justify-between"><dt className="text-muted-foreground">Puntos GPS</dt><dd>{tracking.data.totalPoints}</dd></div>
+              <div className="flex justify-between"><dt className="text-muted-foreground">Puntos GPS</dt><dd>{tracking.data?.points.length ?? 0}</dd></div>
             </dl>
             {data.status === "EN_CAMINO" && (
               <Badge variant="info" className="mt-1">Actualización automática cada 10 s</Badge>
