@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
 import { APP_NAME } from "@/constants/org";
+import { LandingNavbar } from "@/components/landing/navbar";
+import { LandingFooter } from "@/components/landing/footer";
 
 import "../globals.css";
 
@@ -27,7 +29,11 @@ export default function LandingLayout({ children }: LayoutProps<"/">) {
       lang="es"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="flex min-h-dvh flex-col">{children}</body>
+      <body className="flex min-h-dvh flex-col">
+        <LandingNavbar />
+        <main className="flex-1">{children}</main>
+        <LandingFooter />
+      </body>
     </html>
   );
 }

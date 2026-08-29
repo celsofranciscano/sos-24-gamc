@@ -1,16 +1,8 @@
-import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
-import { PagePlaceholder } from "@/components/page-placeholder";
+type RouteParams = { params: Promise<{ emergencyCode: string }> };
 
-export const metadata: Metadata = {
-  title: "Detalle histórico",
-      description: "Reutiliza la vista de detalle de emergencia.",
-};
-
-export default function HistoryDetailPage() {
-  return (
-    <PagePlaceholder
-      title="Detalle histórico"
-    />
-  );
+export default async function HistoryDetailPage({ params }: RouteParams) {
+  const { emergencyCode } = await params;
+  redirect(`/citizen/emergency/${emergencyCode}`);
 }
