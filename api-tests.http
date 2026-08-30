@@ -5,44 +5,52 @@
 ### 🔐 1. AUTENTICACIÓN
 ### ============================================================
 
-### Iniciar sesión como Administrador Central GAMC
+### 1. Obtener Token CSRF (Ejecutar primero)
+# @name getCsrf
+GET {{baseUrl}}/api/auth/csrf
+
+### 2. Iniciar sesión como Administrador Central GAMC
 # @name loginAdmin
 POST {{baseUrl}}/api/auth/callback/institution
 Content-Type: {{contentType}}
 
 {
   "email": "admin@gamc.bo",
-  "password": "Admin1234"
+  "password": "Admin1234",
+  "csrfToken": "{{getCsrf.response.body.csrfToken}}"
 }
 
-### Iniciar sesión como Operador Central GAMC
+### 3. Iniciar sesión como Operador Central GAMC
 # @name loginOperador
 POST {{baseUrl}}/api/auth/callback/institution
 Content-Type: {{contentType}}
 
 {
   "email": "operador@gamc.bo",
-  "password": "Oper12345"
+  "password": "Oper12345",
+  "csrfToken": "{{getCsrf.response.body.csrfToken}}"
 }
 
-### Iniciar sesión como Institución Bomberos
+### 4. Iniciar sesión como Institución Bomberos
 # @name loginBomberos
 POST {{baseUrl}}/api/auth/callback/institution
 Content-Type: {{contentType}}
 
 {
   "email": "admin@bomberos.bo",
-  "password": "Inst12345"
+  "password": "Inst12345",
+  "csrfToken": "{{getCsrf.response.body.csrfToken}}"
 }
 
-### Iniciar sesión como Ciudadano (PWA)
+### 5. Iniciar sesión como Ciudadano (PWA)
 # @name loginCiudadano
 POST {{baseUrl}}/api/auth/callback/citizen
 Content-Type: {{contentType}}
 
 {
   "phoneNumber": "70000010",
-  "password": "Ciudadano123"
+  "password": "Ciudadano123",
+  "csrfToken": "{{getCsrf.response.body.csrfToken}}"
 }
 
 ### ============================================================
