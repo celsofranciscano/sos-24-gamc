@@ -125,6 +125,29 @@ for (const u of users) {
   );
 }
 
+const insertEmergencyType = db.prepare(`
+  INSERT OR IGNORE INTO tbemergencytypes (name, code, description, status, createdAt)
+  VALUES (?, ?, ?, 1, ?)
+`);
+
+// Names must match IncidentType.label / geminiReportCategories exactly on the
+// Flutter side, since the report route resolves emergencyTypeName via a
+// "contains" lookup against this table.
+const emergencyTypes = [
+  ["Robo", "ROBO", "Robo o hurto en curso o reciente."],
+  ["Accidente", "ACCIDENTE", "Accidente de tránsito u otro accidente."],
+  ["Persona sospechosa", "PERSONA_SOSPECHOSA", "Persona o actividad sospechosa."],
+  ["Violencia", "VIOLENCIA", "Violencia física o agresión."],
+  ["Incendio", "INCENDIO", "Incendio o riesgo de incendio."],
+  ["Emergencia médica", "EMERGENCIA_MEDICA", "Emergencia médica o de salud."],
+  ["Vandalismo", "VANDALISMO", "Vandalismo o daño a propiedad."],
+  ["Otro", "OTRO", "Otro tipo de emergencia no listada."],
+];
+
+for (const [name, code, description] of emergencyTypes) {
+  insertEmergencyType.run(name, code, description, new Date().toISOString());
+}
+
 const getCitizenByPhone = db.prepare("SELECT PK_citizen FROM tbcitizens WHERE phoneNumber = ?");
 
 const insertCitizen = db.prepare(`

@@ -6,12 +6,8 @@ import prisma from "@/lib/db/prisma";
 type RouteContext = { params: Promise<{ PK_emergency: string }> };
 
 export async function GET(_request: NextRequest, context: RouteContext) {
-  const session = await auth();
-
-  if (!session?.user || session.user.role !== "CITIZEN") {
-    return NextResponse.json({ error: "No autorizado." }, { status: 401 });
-  }
-
+  // Ver los comentarios de un reporte no requiere sesión; solo publicar uno
+  // (POST, abajo) exige estar autenticado como ciudadano.
   const { PK_emergency } = await context.params;
   const emergencyId = Number(PK_emergency);
 
