@@ -40,6 +40,9 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       acceptedAt: true,
       resolvedAt: true,
       createdAt: true,
+      tbcitizens: {
+        select: { firstName: true, lastName: true },
+      },
       tbemergencytypes: {
         select: { name: true, code: true },
       },
