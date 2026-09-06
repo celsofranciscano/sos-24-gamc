@@ -37,6 +37,7 @@ type AssignmentDetail = {
 type TrackingResponse = {
   points: { latitude: number; longitude: number; speed: number | null; createdAt: string }[];
   current: { latitude: number; longitude: number; createdAt: string } | null;
+  totalPoints: number;
 };
 
 export default function AssignmentDetailPage({
