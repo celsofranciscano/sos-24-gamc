@@ -16,7 +16,10 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite" // Motor de base de datos utilizado por el sistema.
+  provider = "postgresql" // Motor de base de datos utilizado por el sistema (Supabase).
+  // En Prisma 7 la URL de conexión ya no va aquí: la de runtime (pooled, vía
+  // el adapter) se configura en `src/lib/db/prisma.ts`, y la de Migrate
+  // (directa, para DDL) en `prisma.config.ts`.
 }
 
 

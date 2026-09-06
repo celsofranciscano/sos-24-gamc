@@ -25,7 +25,28 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
 API_URL="http://localhost:3000"
 AUTH_URL="http://localhost:3000"
 
-DATABASE_URL="file:./dev.db"
+# Base de datos (Supabase Postgres). Sacar ambas cadenas del dashboard de
+# Supabase: Project Settings → Database → Connection string.
+# DATABASE_URL: conexión con pooling (Supavisor, modo "Transaction", puerto
+# 6543) — la usa la app en runtime/serverless. Agregar "?pgbouncer=true" al
+# final si aparecen errores de "prepared statement already exists".
+# DIRECT_URL: conexión directa (puerto 5432) — la usa `prisma migrate` para
+# poder ejecutar DDL, que el modo transaction del pooler no soporta.
+DATABASE_URL="postgresql://postgres.xxxx:PASSWORD@aws-0-xxxx.pooler.supabase.com:6543/postgres"
+DIRECT_URL="postgresql://postgres.xxxx:PASSWORD@aws-0-xxxx.pooler.supabase.com:5432/postgres"
 BETTER_AUTH_SECRET=f9db5e01c49c9c0ade78026ba0ab8728ecae84a2620573de36719a031eecedf5
 
 AUTH_SECRET=AElzbwqSZ0ms4JCOJ5Cs4HLWsGCKGfDIC+KC6CkLDW8=
+
+# Requerida por /api/citizen/gemini/live-token (reporte por voz de la app
+# móvil): la llave real de Gemini vive solo acá, nunca en el cliente.
+GEMINI_API_KEY=
+
+# Requeridas por /api/citizen/emergencies/[PK_emergency]/evidence (subida de
+# fotos/videos de evidencia): la app móvil sube el archivo a este backend, y
+# es este backend el que sube a Cloudinary (carpeta "arconte") usando estas
+# credenciales — el API Secret nunca llega al cliente. Sacar los tres valores
+# del dashboard de Cloudinary: Account Details → API Keys.
+CLOUDINARY_CLOUD_NAME=
+CLOUDINARY_API_KEY=
+CLOUDINARY_API_SECRET=

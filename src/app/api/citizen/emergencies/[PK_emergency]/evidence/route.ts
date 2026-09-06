@@ -1,18 +1,39 @@
-import { randomUUID } from "crypto";
-import { mkdir, writeFile } from "fs/promises";
-import path from "path";
+import { v2 as cloudinary, type UploadApiErrorResponse, type UploadApiResponse } from "cloudinary";
 import { NextRequest, NextResponse } from "next/server";
 
 import { auth } from "@/auth";
 import prisma from "@/lib/db/prisma";
 
-const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads", "evidence");
+function resourceTypeFor(fileType: string): "image" | "video" {
+  // Cloudinary no tiene un resource_type "audio" propio: el audio se procesa
+  // bajo el mismo pipeline que "video".
+  return fileType === "IMAGE" ? "image" : "video";
+}
 
-function extensionFor(file: File): string {
-  const fromName = path.extname(file.name);
-  if (fromName) return fromName;
-  const fromType = file.type.split("/")[1];
-  return fromType ? `.${fromType}` : "";
+async function uploadToCloudinary(buffer: Buffer, fileType: string): Promise<string> {
+  const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+  const apiKey = process.env.CLOUDINARY_API_KEY;
+  const apiSecret = process.env.CLOUDINARY_API_SECRET;
+
+  if (!cloudName || !apiKey || !apiSecret) {
+    throw new Error("CLOUDINARY_NOT_CONFIGURED");
+  }
+
+  cloudinary.config({ cloud_name: cloudName, api_key: apiKey, api_secret: apiSecret });
+
+  return new Promise<string>((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      { folder: "arconte", resource_type: resourceTypeFor(fileType) },
+      (error?: UploadApiErrorResponse, result?: UploadApiResponse) => {
+        if (error || !result) {
+          reject(error ?? new Error("Cloudinary upload failed"));
+          return;
+        }
+        resolve(result.secure_url);
+      },
+    );
+    uploadStream.end(buffer);
+  });
 }
 
 type RouteContext = { params: Promise<{ PK_emergency: string }> };
@@ -65,11 +86,23 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "file es obligatorio." }, { status: 400 });
     }
 
-    await mkdir(UPLOAD_DIR, { recursive: true });
-    const filename = `${randomUUID()}${extensionFor(file)}`;
     const buffer = Buffer.from(await file.arrayBuffer());
-    await writeFile(path.join(UPLOAD_DIR, filename), buffer);
-    fileUrl = `/uploads/evidence/${filename}`;
+
+    try {
+      fileUrl = await uploadToCloudinary(buffer, fileType);
+    } catch (error) {
+      if (error instanceof Error && error.message === "CLOUDINARY_NOT_CONFIGURED") {
+        return NextResponse.json(
+          { error: "La subida de evidencia no está configurada en el servidor." },
+          { status: 503 },
+        );
+      }
+      console.error("evidence upload: fallo subiendo a Cloudinary", error);
+      return NextResponse.json(
+        { error: "No se pudo subir el archivo de evidencia." },
+        { status: 502 },
+      );
+    }
   } else {
     const body = await request.json();
     fileType = body.fileType;
