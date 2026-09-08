@@ -16,7 +16,10 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite" // Motor de base de datos utilizado por el sistema.
+  provider = "postgresql" // Motor de base de datos utilizado por el sistema (Supabase).
+  // En Prisma 7 la URL de conexión ya no va aquí: la de runtime (pooled, vía
+  // el adapter) se configura en `src/lib/db/prisma.ts`, y la de Migrate
+  // (directa, para DDL) en `prisma.config.ts`.
 }
 
 
@@ -60,6 +63,8 @@ model tbcitizens {
   tbevidences        tbevidences[]             // Relación con las evidencias cargadas por el ciudadano.
   tbnotifications    tbnotifications[]         // Relación con las notificaciones recibidas por el ciudadano.
   tbaisessions       tbaisessions[]            // Relación con las sesiones de interacción con la inteligencia artificial.
+  tbemergencyviews   tbemergencyviews[]        // Relación con las emergencias que el ciudadano ha visualizado.
+  tbemergencylikes   tbemergencylikes[]        // Relación con las emergencias que el ciudadano ha confirmado (like).
 }
 
 
@@ -331,6 +336,8 @@ model tbemergencies {
   tbemergencyroom            tbemergencyrooms?            // Sala de crisis asociada a la emergencia.
   tbevidences                tbevidences[]                // Evidencias multimedia asociadas.
   tbaianalyses               tbaianalyses[]               // Análisis realizados por la inteligencia artificial.
+  tbemergencyviews           tbemergencyviews[]           // Visualizaciones registradas por ciudadanos.
+  tbemergencylikes           tbemergencylikes[]           // Confirmaciones (likes) registradas por ciudadanos.
   tbemergencyrequirements   tbemergencyrequirements[]   // Recursos requeridos para atender la emergencia.
   tbemergencyassignments     tbemergencyassignments[]     // Asignaciones de instituciones y unidades.
   tbemergencystatushistory   tbemergencystatushistory[]   // Historial de cambios de estado.
@@ -553,6 +560,37 @@ model tbevidences {
   @@index([FK_emergency]) // Índice para búsquedas por emergencia.
   @@index([FK_citizen]) // Índice para búsquedas por ciudadano.
   @@index([FK_user]) // Índice para búsquedas por usuario.
+}
+
+
+// ============================================================
+// VISUALIZACIONES Y CONFIRMACIONES (LIKES) DE CIUDADANOS
+// ============================================================
+
+model tbemergencyviews {
+  PK_emergencyView Int           @id @default(autoincrement()) // Clave primaria de la visualización.
+  FK_emergency     Int           // Emergencia visualizada.
+  FK_citizen       Int           // Ciudadano que visualizó la emergencia.
+  createdAt        DateTime      @default(now()) // Fecha y hora de la primera visualización.
+  tbemergencies    tbemergencies @relation(fields: [FK_emergency], references: [PK_emergency]) // Relación con la emergencia.
+  tbcitizens       tbcitizens    @relation(fields: [FK_citizen], references: [PK_citizen]) // Relación con el ciudadano.
+
+  @@unique([FK_emergency, FK_citizen]) // Garantiza una única visualización contada por ciudadano y emergencia.
+  @@index([FK_emergency]) // Índice para búsquedas por emergencia.
+  @@index([FK_citizen]) // Índice para búsquedas por ciudadano.
+}
+
+model tbemergencylikes {
+  PK_emergencyLike Int           @id @default(autoincrement()) // Clave primaria de la confirmación (like).
+  FK_emergency     Int           // Emergencia confirmada.
+  FK_citizen       Int           // Ciudadano que confirmó la emergencia.
+  createdAt        DateTime      @default(now()) // Fecha y hora de la confirmación.
+  tbemergencies    tbemergencies @relation(fields: [FK_emergency], references: [PK_emergency]) // Relación con la emergencia.
+  tbcitizens       tbcitizens    @relation(fields: [FK_citizen], references: [PK_citizen]) // Relación con el ciudadano.
+
+  @@unique([FK_emergency, FK_citizen]) // Garantiza una única confirmación por ciudadano y emergencia.
+  @@index([FK_emergency]) // Índice para búsquedas por emergencia.
+  @@index([FK_citizen]) // Índice para búsquedas por ciudadano.
 }
 
 

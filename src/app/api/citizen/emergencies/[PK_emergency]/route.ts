@@ -8,10 +8,6 @@ type RouteContext = { params: Promise<{ PK_emergency: string }> };
 export async function GET(_request: NextRequest, context: RouteContext) {
   const session = await auth();
 
-  if (!session?.user || session.user.role !== "CITIZEN") {
-    return NextResponse.json({ error: "No autorizado." }, { status: 401 });
-  }
-
   const { PK_emergency } = await context.params;
   const emergencyId = Number(PK_emergency);
 
@@ -19,12 +15,16 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "ID inválido." }, { status: 400 });
   }
 
-  const citizenId = Number(session.user.id);
+  // Ver el detalle de un reporte no requiere sesión; solo se necesita para
+  // saber si el ciudadano actual ya le dio like (likedByMe).
+  const citizenId =
+    session?.user && session.user.role === "CITIZEN"
+      ? Number(session.user.id)
+      : -1;
 
   const emergency = await prisma.tbemergencies.findFirst({
     where: {
       PK_emergency: emergencyId,
-      FK_citizen: citizenId,
     },
     select: {
       PK_emergency: true,
@@ -40,6 +40,9 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       acceptedAt: true,
       resolvedAt: true,
       createdAt: true,
+      tbcitizens: {
+        select: { firstName: true, lastName: true },
+      },
       tbemergencytypes: {
         select: { name: true, code: true },
       },
@@ -70,6 +73,14 @@ export async function GET(_request: NextRequest, context: RouteContext) {
         orderBy: { createdAt: "desc" },
         take: 20,
       },
+      tbemergencylikes: {
+        where: { FK_citizen: citizenId },
+        select: { PK_emergencyLike: true },
+        take: 1,
+      },
+      _count: {
+        select: { tbemergencyviews: true, tbemergencylikes: true },
+      },
     },
   });
 
@@ -80,5 +91,14 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     );
   }
 
-  return NextResponse.json({ emergency });
+  const { tbemergencylikes, _count, ...rest } = emergency;
+
+  return NextResponse.json({
+    emergency: {
+      ...rest,
+      viewsCount: _count.tbemergencyviews,
+      likesCount: _count.tbemergencylikes,
+      likedByMe: tbemergencylikes.length > 0,
+    },
+  });
 }

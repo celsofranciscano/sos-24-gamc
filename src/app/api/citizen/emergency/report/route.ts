@@ -3,6 +3,71 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import prisma from "@/lib/db/prisma";
 
+type EmergencyPriority = "BAJA" | "MEDIA" | "ALTA" | "CRITICA";
+
+// Vidas en riesgo inminente: estado de salud crítico, armas, incendio con
+// personas atrapadas, etc.
+const CRITICAL_PATTERNS = [
+  /paro (cardiaco|respiratorio)/,
+  /no (respira|responde)/,
+  /inconsciente/,
+  /convulsion/,
+  /hemorragia/,
+  /(persona|personas|paciente|pacientes).{0,20}(critic)/,
+  /(critic).{0,20}(salud|estado|gravedad)/,
+  /arma de fuego/,
+  /(disparo|balacera|balead|tiroteo)/,
+  /apunalad/,
+  /explosion/,
+  /incendio.{0,30}(atrapad|no puede salir)/,
+  /(muriendo|se muere|esta muriendo)/,
+  /riesgo de muerte/,
+];
+
+// Daño o peligro real ya presente, pero sin indicar riesgo de muerte inminente.
+const HIGH_PATTERNS = [
+  /herid[oa]s?/,
+  /sangr(e|ando)/,
+  /accidente/,
+  /incendio|fuego/,
+  /choque|volcamiento|atropell/,
+  /violencia|agresion|golpe(s|ando)?/,
+  /amenaza|\barma\b/,
+  /robo/,
+  /secuestro/,
+  /caida.{0,20}(altura|grave)/,
+];
+
+// Molestias o situaciones sin riesgo físico directo.
+const LOW_PATTERNS = [
+  /ruido/,
+  /molestia/,
+  /estacionamiento|mal estacionado/,
+  /objeto perdido|perdid[oa]/,
+  /\bbasura\b/,
+  /sospechos[oa]/,
+];
+
+function stripAccents(text: string): string {
+  return text.normalize("NFD").replace(/[̀-ͯ]/g, "");
+}
+
+/**
+ * Clasifica la prioridad de una emergencia a partir del texto libre de la
+ * descripción, con reglas simples por palabras clave (sin depender de que el
+ * reporte venga del asistente de voz o del wizard manual). MEDIA es el
+ * resultado por defecto cuando no hay señales claras.
+ */
+function classifyPriority(description?: string | null): EmergencyPriority {
+  if (!description) return "MEDIA";
+  const text = stripAccents(description.toLowerCase());
+
+  if (CRITICAL_PATTERNS.some((re) => re.test(text))) return "CRITICA";
+  if (HIGH_PATTERNS.some((re) => re.test(text))) return "ALTA";
+  if (LOW_PATTERNS.some((re) => re.test(text))) return "BAJA";
+  return "MEDIA";
+}
+
 export async function POST(request: NextRequest) {
   const session = await auth();
 
@@ -45,7 +110,7 @@ export async function POST(request: NextRequest) {
       FK_citizen: citizenId,
       FK_emergencyType: emergencyTypeId,
       emergencyCode,
-      priority: "MEDIA",
+      priority: classifyPriority(description),
       status: "REPORTADA",
       description: description || null,
       reportedAt: now,

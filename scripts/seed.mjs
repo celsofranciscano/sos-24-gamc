@@ -1,17 +1,11 @@
+import "dotenv/config";
 import bcrypt from "bcrypt";
-import Database from "better-sqlite3";
+import { Client } from "pg";
 
-const DB_PATH = process.env.DATABASE_URL?.replace("file:", "") ?? "./dev.db";
-
-const db = new Database(DB_PATH);
-db.pragma("foreign_keys = ON");
+const client = new Client({ connectionString: process.env.DATABASE_URL });
+await client.connect();
 
 const hash = (password) => bcrypt.hashSync(password, 10);
-
-const insertPrivilege = db.prepare(`
-  INSERT OR IGNORE INTO tbprivileges (privilege, privilegeCode, privilegeType, description)
-  VALUES (?, ?, ?, ?)
-`);
 
 const privileges = [
   ["Administrador Central", "CENTRAL_ADMIN", "GAMC", "Control total del sistema."],
@@ -21,14 +15,14 @@ const privileges = [
   ["Operador de Institución", "INSTITUTION_OPERATOR", "INSTITUTION", "Gestión de asignaciones de la institución."],
 ];
 
-for (const p of privileges) insertPrivilege.run(...p);
-
-const getPrivilege = db.prepare("SELECT PK_privilege FROM tbprivileges WHERE privilegeCode = ?");
-
-const insertInstitutionType = db.prepare(`
-  INSERT OR IGNORE INTO tbinstitutiontypes (name, code, description)
-  VALUES (?, ?, ?)
-`);
+for (const p of privileges) {
+  await client.query(
+    `INSERT INTO "tbprivileges" ("privilege", "privilegeCode", "privilegeType", "description")
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT ("privilegeCode") DO NOTHING`,
+    p,
+  );
+}
 
 const institutionTypes = [
   ["Policía", "POLICIA", "Policía Boliviana"],
@@ -38,16 +32,14 @@ const institutionTypes = [
   ["Seguridad Ciudadana", "SEGURIDAD_CIUDADANA", "Seguridad Ciudadana Municipal"],
 ];
 
-for (const t of institutionTypes) insertInstitutionType.run(...t);
-
-const getInstitutionType = db.prepare("SELECT PK_institutionType FROM tbinstitutiontypes WHERE code = ?");
-
-const insertInstitution = db.prepare(`
-  INSERT INTO tbinstitutions (FK_institutionType, name, acronym, phoneNumber, createdAt, updatedAt)
-  VALUES (?, ?, ?, ?, ?, ?)
-`);
-
-const getInstitutionByName = db.prepare("SELECT PK_institution FROM tbinstitutions WHERE name = ?");
+for (const t of institutionTypes) {
+  await client.query(
+    `INSERT INTO "tbinstitutiontypes" ("name", "code", "description")
+     VALUES ($1, $2, $3)
+     ON CONFLICT ("code") DO NOTHING`,
+    t,
+  );
+}
 
 const institutions = [
   ["POLICIA", "Policía Boliviana", "POLICIA", "110"],
@@ -57,26 +49,19 @@ const institutions = [
   ["SEGURIDAD_CIUDADANA", "Seguridad Ciudadana GAMC", "SCG", "112"],
 ];
 
-for (const [typeCode, name, acronym, phone] of institutions) {
-  if (getInstitutionByName.get(name)) continue;
-  const type = getInstitutionType.get(typeCode);
-  insertInstitution.run(
-    type.PK_institutionType,
-    name,
-    acronym,
-    phone,
-    new Date().toISOString(),
-    new Date().toISOString(),
+for (const [typeCode, name, acronym, phoneNumber] of institutions) {
+  const { rows: existingRows } = await client.query(`SELECT 1 FROM "tbinstitutions" WHERE "name" = $1`, [name]);
+  if (existingRows.length > 0) continue;
+  const { rows: typeRows } = await client.query(
+    `SELECT "PK_institutionType" FROM "tbinstitutiontypes" WHERE "code" = $1`,
+    [typeCode],
+  );
+  await client.query(
+    `INSERT INTO "tbinstitutions" ("FK_institutionType", "name", "acronym", "phoneNumber", "createdAt", "updatedAt")
+     VALUES ($1, $2, $3, $4, now(), now())`,
+    [typeRows[0].PK_institutionType, name, acronym, phoneNumber],
   );
 }
-
-const getInstitution = db.prepare("SELECT PK_institution FROM tbinstitutions WHERE name = ?");
-const getUserByEmail = db.prepare("SELECT PK_user FROM tbusers WHERE email = ?");
-
-const insertUser = db.prepare(`
-  INSERT INTO tbusers (FK_privilege, FK_institution, firstName, lastName, phoneNumber, email, password, createdAt, updatedAt)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-`);
 
 const users = [
   {
@@ -109,38 +94,66 @@ const users = [
 ];
 
 for (const u of users) {
-  if (getUserByEmail.get(u.email)) continue;
-  const privilege = getPrivilege.get(u.privilegeCode);
-  const institution = u.institution ? getInstitution.get(u.institution) : undefined;
-  insertUser.run(
-    privilege.PK_privilege,
-    institution?.PK_institution ?? null,
-    u.firstName,
-    u.lastName,
-    u.phoneNumber,
-    u.email,
-    hash(u.password),
-    new Date().toISOString(),
-    new Date().toISOString(),
+  const { rows: existingRows } = await client.query(`SELECT 1 FROM "tbusers" WHERE "email" = $1`, [u.email]);
+  if (existingRows.length > 0) continue;
+  const { rows: privilegeRows } = await client.query(
+    `SELECT "PK_privilege" FROM "tbprivileges" WHERE "privilegeCode" = $1`,
+    [u.privilegeCode],
+  );
+  let institutionId = null;
+  if (u.institution) {
+    const { rows: institutionRows } = await client.query(
+      `SELECT "PK_institution" FROM "tbinstitutions" WHERE "name" ILIKE $1`,
+      [`%${u.institution}%`],
+    );
+    institutionId = institutionRows[0]?.PK_institution ?? null;
+  }
+  await client.query(
+    `INSERT INTO "tbusers" ("FK_privilege", "FK_institution", "firstName", "lastName", "phoneNumber", "email", "password", "createdAt", "updatedAt")
+     VALUES ($1, $2, $3, $4, $5, $6, $7, now(), now())`,
+    [privilegeRows[0].PK_privilege, institutionId, u.firstName, u.lastName, u.phoneNumber, u.email, hash(u.password)],
   );
 }
 
-const getCitizenByPhone = db.prepare("SELECT PK_citizen FROM tbcitizens WHERE phoneNumber = ?");
+// Names must match IncidentType.label / geminiReportCategories exactly on the
+// Flutter side, since the report route resolves emergencyTypeName via a
+// "contains" lookup against this table.
+const emergencyTypes = [
+  ["Robo", "ROBO", "Robo o hurto en curso o reciente."],
+  ["Accidente", "ACCIDENTE", "Accidente de tránsito u otro accidente."],
+  ["Persona sospechosa", "PERSONA_SOSPECHOSA", "Persona o actividad sospechosa."],
+  ["Violencia", "VIOLENCIA", "Violencia física o agresión."],
+  ["Incendio", "INCENDIO", "Incendio o riesgo de incendio."],
+  ["Emergencia médica", "EMERGENCIA_MEDICA", "Emergencia médica o de salud."],
+  ["Vandalismo", "VANDALISMO", "Vandalismo o daño a propiedad."],
+  ["Otro", "OTRO", "Otro tipo de emergencia no listada."],
+];
 
-const insertCitizen = db.prepare(`
-  INSERT INTO tbcitizens (firstName, lastName, CI, phoneNumber, password, createdAt, updatedAt)
-  VALUES (?, ?, ?, ?, ?, ?, ?)
-`);
+for (const [name, code, description] of emergencyTypes) {
+  await client.query(
+    `INSERT INTO "tbemergencytypes" ("name", "code", "description", "status", "createdAt")
+     VALUES ($1, $2, $3, true, now())
+     ON CONFLICT ("code") DO NOTHING`,
+    [name, code, description],
+  );
+}
 
-if (!getCitizenByPhone.get("70000010")) {
-  insertCitizen.run(
-    "Pedro",
-    "Ciudadano",
-    "1234567",
-    "70000010",
-    hash("Ciudadano123"),
-    new Date().toISOString(),
-    new Date().toISOString(),
+const citizen = {
+  firstName: "Pedro",
+  lastName: "Ciudadano",
+  CI: "1234567",
+  phoneNumber: "70000010",
+  password: "Ciudadano123",
+};
+
+const { rows: existingCitizenRows } = await client.query(`SELECT 1 FROM "tbcitizens" WHERE "phoneNumber" = $1`, [
+  citizen.phoneNumber,
+]);
+if (existingCitizenRows.length === 0) {
+  await client.query(
+    `INSERT INTO "tbcitizens" ("firstName", "lastName", "CI", "phoneNumber", "password", "createdAt", "updatedAt")
+     VALUES ($1, $2, $3, $4, $5, now(), now())`,
+    [citizen.firstName, citizen.lastName, citizen.CI, citizen.phoneNumber, hash(citizen.password)],
   );
 }
 
@@ -150,4 +163,4 @@ console.log("  Operador:      operador@gamc.bo / Oper12345");
 console.log("  Bomberos:      admin@bomberos.bo / Inst12345");
 console.log("  Ciudadano:     70000010 / Ciudadano123");
 
-db.close();
+await client.end();
