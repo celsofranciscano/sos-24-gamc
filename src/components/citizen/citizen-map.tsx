@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { MapPin, Navigation, Loader2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Loader2, MapPin } from "lucide-react";
 
+import { GoogleMap, type MapMarker } from "@/components/maps/google-map";
 import { cn } from "@/lib/utils";
 
 type Coordinates = {
@@ -33,12 +34,11 @@ export function CitizenMap({
   className,
   height = "100%",
 }: CitizenMapProps) {
-  const mapRef = useRef<HTMLDivElement | null>(null);
   const [myLocation, setMyLocation] = useState<Coordinates | null>(null);
   const [loading, setLoading] = useState(true);
   const [mapError, setMapError] = useState<string | null>(null);
 
-  // Get user's current location
+  // Get user's current GPS location
   useEffect(() => {
     if (!showMyLocation) {
       setLoading(false);
@@ -46,7 +46,7 @@ export function CitizenMap({
     }
 
     if (!navigator.geolocation) {
-      setMapError("Geolocalización no soportada.");
+      setMapError("Geolocalización no soportada en este navegador.");
       setLoading(false);
       return;
     }
@@ -62,11 +62,11 @@ export function CitizenMap({
         setLoading(false);
       },
       (err) => {
-        console.error("Geolocation error:", err);
-        // Default to Cochabamba
+        console.warn("Geolocation warning:", err.message);
+        // Default to Cochabamba centro
         const defaultCoords = {
-          latitude: -17.4139,
-          longitude: -66.1653,
+          latitude: -17.3895,
+          longitude: -66.1568,
         };
         setMyLocation(defaultCoords);
         onLocationChange?.(defaultCoords);
@@ -75,39 +75,6 @@ export function CitizenMap({
       { enableHighAccuracy: true, timeout: 10000 },
     );
   }, [showMyLocation, onLocationChange]);
-
-  const effectiveCenter = center || myLocation || { latitude: -17.4139, longitude: -66.1653 };
-
-  // Build Google Maps URL with markers
-  const buildMapUrl = useCallback(() => {
-    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-    const allMarkers = [...markers];
-
-    if (showMyLocation && myLocation) {
-      allMarkers.unshift({
-        id: "my-location",
-        latitude: myLocation.latitude,
-        longitude: myLocation.longitude,
-        label: "Tú",
-        color: "red",
-      });
-    }
-
-    if (apiKey) {
-      // Use Google Maps Static API
-      const markerStr = allMarkers
-        .map(
-          (m) =>
-            `markers=color:${m.color || "red"}%7Clabel:${encodeURIComponent(m.label || "")}%7C${m.latitude},${m.longitude}`,
-        )
-        .join("&");
-
-      return `https://maps.googleapis.com/maps/api/staticmap?center=${effectiveCenter.latitude},${effectiveCenter.longitude}&zoom=14&size=600x400&maptype=roadmap&${markerStr}&key=${apiKey}`;
-    }
-
-    // Fallback: OpenStreetMap embed
-    return `https://www.openstreetmap.org/export/embed.html?bbox=${effectiveCenter.longitude - 0.02},${effectiveCenter.latitude - 0.015},${effectiveCenter.longitude + 0.02},${effectiveCenter.latitude + 0.015}&layer=mapnik&marker=${effectiveCenter.latitude},${effectiveCenter.longitude}`;
-  }, [markers, showMyLocation, myLocation, effectiveCenter]);
 
   if (loading) {
     return (
@@ -119,48 +86,62 @@ export function CitizenMap({
         style={{ height }}
       >
         <div className="flex flex-col items-center gap-2 text-muted-foreground">
-          <Loader2 className="size-6 animate-spin" />
-          <p className="text-sm">Obteniendo ubicación...</p>
+          <Loader2 className="size-6 animate-spin text-primary" />
+          <p className="text-sm">Localizando ubicación GPS...</p>
         </div>
       </div>
     );
   }
 
-  return (
-    <div className={cn("relative overflow-hidden rounded-2xl", className)} style={{ height }}>
-      {mapError ? (
-        <div className="flex h-full items-center justify-center bg-muted/50">
-          <div className="text-center text-muted-foreground">
-            <MapPin className="mx-auto size-8 opacity-30" />
-            <p className="mt-1 text-sm">{mapError}</p>
-          </div>
+  if (mapError) {
+    return (
+      <div
+        className={cn(
+          "flex items-center justify-center bg-muted/50 rounded-2xl p-4",
+          className,
+        )}
+        style={{ height }}
+      >
+        <div className="text-center text-muted-foreground">
+          <MapPin className="mx-auto size-8 opacity-30 text-destructive" />
+          <p className="mt-1 text-sm">{mapError}</p>
         </div>
-      ) : (
-        <>
-          <iframe
-            src={buildMapUrl()}
-            className="h-full w-full border-0"
-            loading="lazy"
-            title="Mapa"
-          />
-          {/* My location button */}
-          {showMyLocation && myLocation && (
-            <button
-              onClick={() => {
-                if (mapRef.current) {
-                  const iframe = mapRef.current.querySelector("iframe");
-                  if (iframe) {
-                    iframe.src = buildMapUrl();
-                  }
-                }
-              }}
-              className="absolute right-3 bottom-3 flex size-10 items-center justify-center rounded-full bg-white shadow-lg border border-border"
-            >
-              <Navigation className="size-4 text-foreground" />
-            </button>
-          )}
-        </>
-      )}
+      </div>
+    );
+  }
+
+  const resolvedCenter = center
+    ? { lat: center.latitude, lng: center.longitude }
+    : myLocation
+    ? { lat: myLocation.latitude, lng: myLocation.longitude }
+    : { lat: -17.3895, lng: -66.1568 };
+
+  const mapMarkers: MapMarker[] = markers.map((m) => ({
+    id: m.id,
+    lat: m.latitude,
+    lng: m.longitude,
+    title: m.label,
+    color: m.color ?? "#dc2626",
+  }));
+
+  if (showMyLocation && myLocation && !markers.some((m) => m.id === "me" || m.id === "my-location")) {
+    mapMarkers.unshift({
+      id: "my-location",
+      lat: myLocation.latitude,
+      lng: myLocation.longitude,
+      title: "Tu ubicación",
+      color: "#2563eb",
+    });
+  }
+
+  return (
+    <div className={cn("relative overflow-hidden rounded-2xl w-full", className)} style={{ height }}>
+      <GoogleMap
+        center={resolvedCenter}
+        markers={mapMarkers}
+        zoom={15}
+        className="h-full w-full rounded-2xl border-0"
+      />
     </div>
   );
 }

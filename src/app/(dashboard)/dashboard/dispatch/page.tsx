@@ -55,14 +55,14 @@ function AssignmentActions({ row, onDone }: { row: DispatchRow; onDone: () => vo
     onError: (err: Error) => setError(err.message),
   });
 
-  const actions: { op: string; label: string; variant?: "default" | "outline" | "destructive" | "success" | "secondary" }[] = [];
+  const actions: { op: string; label: string; variant?: "default" | "outline" | "destructive" | "secondary" }[] = [];
   if (row.status === "SOLICITADA") {
-    actions.push({ op: "accept", label: "Aceptar", variant: "success" });
+    actions.push({ op: "accept", label: "Aceptar", variant: "default" });
     actions.push({ op: "reject", label: "Rechazar", variant: "destructive" });
   }
   if (row.status === "ACEPTADA") actions.push({ op: "depart", label: "Unidad sale", variant: "default" });
   if (row.status === "EN_CAMINO") actions.push({ op: "arrive", label: "Llegó al sitio" });
-  if (row.status === "EN_SITIO") actions.push({ op: "complete", label: "Finalizar", variant: "success" });
+  if (row.status === "EN_SITIO") actions.push({ op: "complete", label: "Finalizar", variant: "default" });
   if (["SOLICITADA", "ACEPTADA"].includes(row.status)) {
     actions.push({ op: "cancel", label: "Cancelar", variant: "outline" });
   }

@@ -9,16 +9,26 @@
     "start": "next start",
     "lint": "eslint",
     "postinstall": "prisma generate",
+<<<<<<< HEAD
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:seed": "node scripts/seed.mjs"
+=======
+    "db:push": "tsx scripts/db-push-turso.ts",
+    "db:seed": "tsx scripts/seed.ts"
+>>>>>>> upstream/main
   },
   "dependencies": {
     "@ai-sdk/gateway": "^4.0.68",
     "@ai-sdk/react": "^4.0.87",
     "@base-ui/react": "^1.7.0",
+<<<<<<< HEAD
     "@google/genai": "^2.21.0",
     "@prisma/adapter-pg": "^7.10.0",
+=======
+    "@libsql/client": "^0.17.4",
+    "@prisma/adapter-libsql": "^7.10.0",
+>>>>>>> upstream/main
     "@prisma/client": "^7.9.1",
     "@shadcn/helpers": "^0.2.0",
     "@shadcn/react": "^0.3.0",
@@ -46,6 +56,11 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/bcrypt": "^6.0.0",
+<<<<<<< HEAD
+=======
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/google.maps": "^3.66.0",
+>>>>>>> upstream/main
     "@types/node": "^20.19.43",
     "@types/pg": "^8.23.1",
     "@types/react": "^19",
@@ -54,6 +69,7 @@
     "eslint-config-next": "16.3.2",
     "prisma": "^7.9.1",
     "tailwindcss": "^4",
+    "tsx": "^4.23.12",
     "typescript": "^5"
   }
 }
